@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เกมฝึกพิมพ์ของหนู</title>
+<style>
+  :root {
+    --k: min(54px, 6vw);
+    --gap: min(6px, 0.7vw);
+    --f0: #ff8fab; --f1: #ffb86b; --f2: #ffe066; --f3: #8ce99a;
+    --f4: #66d9e8; --f5: #74c0fc; --f6: #b197fc; --f7: #f783ac;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Leelawadee UI", "Segoe UI", Tahoma, "Thonburi", sans-serif;
+    background: linear-gradient(#8fd3ff, #d9f2ff 60%, #b8f0c0) fixed;
+    color: #24405a;
+    overflow: hidden;
+    user-select: none;
+  }
+  .screen { display: none; height: 100%; flex-direction: column; align-items: center; }
+  .screen.on { display: flex; }
+  button { font-family: inherit; cursor: pointer; border: none; }
+
+  /* ---------- menu ---------- */
+  #menu, #ark { gap: 2vh; padding: 3vh 16px; overflow-y: auto; }
+  h1 { margin: 0; font-size: min(48px, 7vw); text-shadow: 0 3px 0 #fff; text-align: center; }
+  .langs { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .langs button, .pill {
+    font-size: min(24px, 4vw); padding: 10px 24px; border-radius: 999px;
+    background: #fff; color: #24405a; box-shadow: 0 4px 0 #9bb9d1;
+  }
+  .langs button.on { background: #ffd43b; box-shadow: 0 4px 0 #e0a800; }
+  .pill.go { background: #51cf66; color: #fff; box-shadow: 0 4px 0 #2f9e44; }
+  .pill.fun { background: #ff922b; color: #fff; box-shadow: 0 4px 0 #d9480f; }
+  .pill.small { font-size: min(16px, 3vw); padding: 6px 16px; opacity: .8; flex: none; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; width: min(900px, 96vw); flex: none; }
+  .lv {
+    background: #fff; border-radius: 20px; padding: 10px 6px 8px;
+    box-shadow: 0 6px 0 #9bb9d1; text-align: center; color: #24405a;
+    transition: transform .1s;
+  }
+  .lv:hover { transform: translateY(-3px); }
+  .lv:active { transform: translateY(3px); box-shadow: 0 2px 0 #9bb9d1; }
+  .lv.lock { opacity: .5; cursor: not-allowed; transform: none; }
+  .lv .n { font-size: 26px; font-weight: 700; }
+  .lv .s { font-size: 19px; height: 1.5em; white-space: nowrap; overflow: hidden; }
+  .lv .st { font-size: 17px; letter-spacing: 1px; }
+  .dim { opacity: .22; filter: grayscale(1); }
+
+  /* ---------- เรือโนอาห์ ---------- */
+  .arkbig { font-size: min(90px, 16vw); line-height: 1; }
+  .pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; width: min(820px, 96vw); flex: none; }
+  .pair { background: #ffffffcc; border-radius: 18px; padding: 8px 4px; text-align: center; font-size: 38px; }
+  .pair .dim { opacity: .4; }
+  .pair small { display: block; font-size: 14px; opacity: .7; }
+
+  /* ---------- play ---------- */
+  #play { justify-content: space-between; padding: 1.5vh 12px 2vh; }
+  .top { width: min(900px, 96vw); display: flex; align-items: center; gap: 14px; }
+  .round { width: 54px; height: 54px; border-radius: 50%; font-size: 26px; background: #fff; box-shadow: 0 4px 0 #9bb9d1; flex: none; }
+  .track { flex: 1; height: 18px; background: #ffffffaa; border-radius: 99px; position: relative; }
+  .track .fill { height: 100%; width: 0; background: #ffd43b; border-radius: 99px; transition: width .4s; }
+  .track .rocket { position: absolute; top: -17px; left: 0; font-size: 34px; transform: translateX(-50%) scaleX(-1); transition: left .4s; }
+  .track .moon { position: absolute; right: -8px; top: -17px; font-size: 34px; }
+  .hud { display: flex; gap: 10px; font-size: min(24px, 4vw); font-weight: 700; flex: none; margin-left: 14px; }
+  .hud span { background: #fff; border-radius: 99px; padding: 6px 14px; box-shadow: 0 4px 0 #9bb9d1; white-space: nowrap; }
+  .hud #combo { background: #ff922b; color: #fff; box-shadow: 0 4px 0 #d9480f; }
+  .hud span:empty { display: none; }
+  .hud .bump { animation: bump .25s; }
+  @keyframes bump { 50% { transform: scale(1.35); } }
+
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; width: 100%; overflow: hidden; }
+  /* ลูกโป่งลอยขึ้นเรื่อย ๆ ต้องกดให้ทันก่อนหลุดจอ */
+  .riser { --bw: min(24vh, 200px); --bh: min(27vh, 216px); position: absolute; left: 50%; margin-left: calc(var(--bw) / -2); animation: rise var(--t) linear forwards; }
+  @keyframes rise { from { top: calc(100% - var(--bh)); } to { top: calc(var(--bh) * -1.1); } }
+  .balloon {
+    width: var(--bw); height: var(--bh);
+    border-radius: 50% 50% 48% 48% / 46% 46% 54% 54%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: min(15vh, 120px); font-weight: 700; color: #fff;
+    text-shadow: 0 4px 0 #00000026;
+    box-shadow: inset -14px -18px 0 #00000018, inset 14px 14px 0 #ffffff40;
+    animation: bob 2.4s ease-in-out infinite; position: relative;
+  }
+  .balloon::after { content: ""; position: absolute; bottom: -9vh; left: 50%; width: 3px; height: 9vh; background: #ffffffcc; }
+  .balloon.pop { animation: pop .3s forwards; }
+  .balloon.shake, .word.shake, .bubble.shake { animation: shake .3s; }
+  @keyframes bob { 50% { transform: translateY(-14px); } }
+  @keyframes pop { 60% { transform: scale(1.35); opacity: .9; } 100% { transform: scale(0); opacity: 0; } }
+  @keyframes shake { 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
+
+  .pic { font-size: min(16vh, 130px); line-height: 1.1; }
+  .word { display: flex; gap: 8px; font-size: min(12vh, 96px, 11vw); font-weight: 700; line-height: 1.5; }
+  .word.long { font-size: min(8vh, 64px, 6.5vw); gap: 4px; }
+  .word span { min-width: .7em; text-align: center; color: #9bb1c4; border-bottom: 8px solid transparent; }
+  .word span.ok { color: #2f9e44; }
+  .word span.cur { color: #24405a; border-color: #ff922b; animation: bob 1s ease-in-out infinite; }
+
+  .bit { position: absolute; font-size: 34px; pointer-events: none; animation: fly .8s ease-out forwards; }
+  @keyframes fly { to { transform: translate(var(--dx), var(--dy)) rotate(200deg); opacity: 0; } }
+
+  .hint { height: 44px; display: flex; align-items: center; gap: 10px; font-size: min(26px, 4vw); font-weight: 600; }
+  .hint i { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #fff; display: inline-block; }
+
+  .kb { display: flex; flex-direction: column; gap: var(--gap); padding: 12px; background: #ffffffb0; border-radius: 20px; }
+  .row { display: flex; gap: var(--gap); }
+  .key {
+    width: var(--k); height: var(--k); border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--k) * .5); font-weight: 600; color: #24405a;
+    box-shadow: 0 3px 0 #00000026; opacity: .55; position: relative;
+  }
+  .key.use { opacity: 1; }
+  .key.space { width: calc(var(--k) * 6); background: #e9ecef; }
+  .key.bump::after { content: ""; position: absolute; bottom: 5px; width: 30%; height: 3px; border-radius: 2px; background: #24405a88; }
+  .key.target { opacity: 1; outline: 5px solid #ff6b00; z-index: 2; animation: pulse .7s ease-in-out infinite; }
+  .key.bad { background: #ff6b6b !important; }
+  @keyframes pulse { 50% { transform: scale(1.22); } }
+
+  /* ---------- บอส ---------- */
+  body.night { background: linear-gradient(#1b1464, #5f3dc4 70%, #343a40) fixed; }
+  .night .hint { color: #fff; }
+  .boss { display: flex; flex-direction: column; align-items: center; gap: 1vh; }
+  .boss .hp { font-size: min(4.5vh, 34px); letter-spacing: 4px; }
+  .boss .vs { display: flex; align-items: center; gap: 4vw; }
+  .boss .mon { font-size: min(21vh, 160px); line-height: 1.1; animation: bob 1.2s ease-in-out infinite; }
+  .boss .mon.hit { animation: hit .3s; }
+  .boss .mon.dead { animation: dead .7s forwards; }
+  @keyframes hit { 30% { transform: scale(.75) rotate(-14deg); filter: brightness(2.5); } }
+  @keyframes dead { 40% { transform: scale(1.4) rotate(20deg); filter: brightness(3); } 100% { transform: scale(0) rotate(360deg); opacity: 0; } }
+  .boss .bubble {
+    background: #fff; border-radius: 28px; padding: 0 .5em; min-width: 1.6em; text-align: center;
+    font-size: min(12vh, 96px); font-weight: 700; color: #24405a; box-shadow: 0 6px 0 #00000040;
+  }
+  .shot { position: absolute; left: 50%; bottom: 0; font-size: 44px; pointer-events: none; animation: shot .28s ease-in forwards; }
+  @keyframes shot { to { bottom: 55%; transform: rotate(300deg) scale(.6); opacity: .3; } }
+
+  .toast {
+    position: fixed; left: 50%; top: 26%; z-index: 5; white-space: nowrap; pointer-events: none;
+    font-size: min(52px, 7.5vw); font-weight: 800; color: #fff;
+    text-shadow: 0 3px 0 #e8590c, 0 0 14px #e8590c;
+    animation: toast 1.4s ease-out forwards;
+  }
+  @keyframes toast {
+    0% { transform: translateX(-50%) scale(.3); opacity: 0; }
+    20% { transform: translateX(-50%) scale(1.15); opacity: 1; }
+    70% { transform: translateX(-50%); opacity: 1; }
+    100% { transform: translate(-50%, -70px); opacity: 0; }
+  }
+  .conf { position: fixed; top: -50px; font-size: 32px; pointer-events: none; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(115vh) rotate(540deg); } }
+
+  /* ---------- done ---------- */
+  #done { justify-content: center; gap: 2.4vh; padding: 0 16px; }
+  #done .big { font-size: min(60px, 10vw); font-weight: 700; text-shadow: 0 3px 0 #fff; text-align: center; }
+  #done .stars { font-size: min(100px, 18vw); letter-spacing: 8px; text-align: center; }
+  #done .stars span { display: inline-block; animation: star .5s backwards; }
+  @keyframes star { from { transform: scale(0) rotate(-180deg); } }
+  #done .btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .reward { font-size: min(30px, 5vw); font-weight: 700; text-align: center; }
+  .reward:empty { display: none; }
+  .verse { max-width: min(640px, 90vw); text-align: center; font-size: min(26px, 4.4vw); font-weight: 600; }
+  .verse small { display: block; font-size: .7em; font-weight: 400; opacity: .75; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div id="menu" class="screen on">
+  <h1>🕊️ เกมฝึกพิมพ์ของหนู 📖</h1>
+  <div class="langs">
+    <button data-lang="th">ก ข ค ไทย</button>
+    <button data-lang="en">A B C อังกฤษ</button>
+    <button id="snd" title="เสียง">🔊</button>
+  </div>
+  <div class="langs">
+    <button class="pill fun" id="endlessBtn"></button>
+    <button class="pill" id="arkBtn"></button>
+    <span class="pill" id="total"></span>
+  </div>
+  <div class="levels" id="levels"></div>
+  <button class="pill small" id="unlock"></button>
+</div>
+
+<div id="ark" class="screen">
+  <h1>เรือโนอาห์ของหนู</h1>
+  <div class="arkbig">🚢🌈</div>
+  <div class="reward" id="arkCount"></div>
+  <div class="pairs" id="pairs"></div>
+  <button class="pill go" id="arkBack">🏠 กลับเมนู</button>
+</div>
+
+<div id="play" class="screen">
+  <div class="top">
+    <button class="round" id="back" title="กลับเมนู (Esc)">🏠</button>
+    <div class="track"><div class="fill" id="fill"></div><span class="rocket" id="rocket">🕊️</span><span class="moon">🌈</span></div>
+    <div class="hud"><span id="lives"></span><span id="score">⭐ 0</span><span id="combo"></span></div>
+  </div>
+  <div class="stage" id="stage"></div>
+  <div class="hint" id="hint"></div>
+  <div class="kb" id="kb"></div>
+</div>
+
+<div id="done" class="screen">
+  <div class="big" id="doneMsg">เก่งมาก!</div>
+  <div class="stars" id="doneStars"></div>
+  <div class="pill" id="doneScore"></div>
+  <div class="reward" id="doneReward"></div>
+  <div class="verse" id="verse"></div>
+  <div class="btns">
+    <button class="pill" id="again">🔁 เล่นอีกครั้ง</button>
+    <button class="pill go" id="next">ด่านต่อไป ➡️</button>
+    <button class="pill" id="home">🏠 เมนู</button>
+  </div>
+</div>
+
+<script>
+// ---------- แป้นพิมพ์ ----------
+// จับคู่ด้วยตำแหน่งปุ่มจริง (event.code) จึงไม่ต้องสลับภาษาของ Windows ก่อนเล่น
+const ROWS = [
+  ['Backquote','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal'],
+  ['KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP','BracketLeft','BracketRight','Backslash'],
+  ['KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','Semicolon','Quote'],
+  ['KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM','Comma','Period','Slash'],
+];
+const ROW_OFFSET = [0, 1.5, 1.85, 2.4]; // เยื้องแถวแบบคีย์บอร์ดจริง (หน่วย: ความกว้างปุ่ม)
+
+const LABEL = {
+  en: { Backquote:'`', Minus:'-', Equal:'=', BracketLeft:'[', BracketRight:']', Backslash:'\\',
+        Semicolon:';', Quote:"'", Comma:',', Period:'.', Slash:'/' },
+  th: { Backquote:'', Digit1:'ๅ', Digit2:'/', Digit3:'-', Digit4:'ภ', Digit5:'ถ', Digit6:'ุ', Digit7:'ึ',
+        Digit8:'ค', Digit9:'ต', Digit0:'จ', Minus:'ข', Equal:'ช',
+        KeyQ:'ๆ', KeyW:'ไ', KeyE:'ำ', KeyR:'พ', KeyT:'ะ', KeyY:'ั', KeyU:'ี', KeyI:'ร', KeyO:'น', KeyP:'ย',
+        BracketLeft:'บ', BracketRight:'ล', Backslash:'ฃ',
+        KeyA:'ฟ', KeyS:'ห', KeyD:'ก', KeyF:'ด', KeyG:'เ', KeyH:'้', KeyJ:'่', KeyK:'า', KeyL:'ส',
+        Semicolon:'ว', Quote:'ง',
+        KeyZ:'ผ', KeyX:'ป', KeyC:'แ', KeyV:'อ', KeyB:'ิ', KeyN:'ื', KeyM:'ท', Comma:'ม', Period:'ใ', Slash:'ฝ' },
+};
+for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') LABEL.en['Key' + c] = c;
+for (const d of '0123456789') LABEL.en['Digit' + d] = d;
+
+const CODE_OF = { en: {}, th: {} };
+for (const l of ['en', 'th']) for (const [code, ch] of Object.entries(LABEL[l])) if (ch) CODE_OF[l][ch] = code;
+
+// นิ้ว 0-3 = มือซ้าย (ก้อย→ชี้), 4-7 = มือขวา (ชี้→ก้อย)
+const FINGER_KEYS = [
+  ['Backquote','Digit1','KeyQ','KeyA','KeyZ'],
+  ['Digit2','KeyW','KeyS','KeyX'],
+  ['Digit3','KeyE','KeyD','KeyC'],
+  ['Digit4','Digit5','KeyR','KeyT','KeyF','KeyG','KeyV','KeyB'],
+  ['Digit6','Digit7','KeyY','KeyU','KeyH','KeyJ','KeyN','KeyM'],
+  ['Digit8','KeyI','KeyK','Comma'],
+  ['Digit9','KeyO','KeyL','Period'],
+  ['Digit0','Minus','Equal','KeyP','BracketLeft','BracketRight','Backslash','Semicolon','Quote','Slash'],
+];
+const FINGER_NAME = ['นิ้วก้อยซ้าย','นิ้วนางซ้าย','นิ้วกลางซ้าย','นิ้วชี้ซ้าย','นิ้วชี้ขวา','นิ้วกลางขวา','นิ้วนางขวา','นิ้วก้อยขวา'];
+const FINGER = {};
+FINGER_KEYS.forEach((keys, f) => keys.forEach(k => FINGER[k] = f));
+
+// ---------- ด่าน ----------
+// seq: สอนปุ่มใหม่ทีละกลุ่ม โดยสะสมปุ่มของกลุ่มก่อนหน้าในแถวเดียวกันไว้ด้วย
+const K = s => s.split(' ').map(x => /^\d$/.test(x) ? 'Digit' + x : x.length === 1 ? 'Key' + x : x);
+function seq(groups) { let acc = []; return groups.map(g => { const fresh = K(g); acc = [...acc, ...fresh]; return { keys: [...acc], fresh }; }); }
+const last = arr => arr[arr.length - 1].keys;
+const review = (keys, icon = '🔁') => ({ keys, fresh: [], n: 14, icon });
+
+const EN_HOME = seq(['F J', 'D K', 'S L', 'A', 'G H']);
+const EN_TOP = seq(['R U', 'E I', 'W O', 'Q P', 'T Y']);
+const EN_BOT = seq(['V M', 'C N', 'X B', 'Z']);
+const EN_NUM = seq(['1 2 3 4 5', '6 7 8 9 0']);
+const TH_HOME = seq(['F K', 'D L', 'S Semicolon', 'A Quote', 'G']);
+const TH_TOP = seq(['R I', 'T O', 'W P', 'E BracketLeft BracketRight', 'Q']);
+const TH_BOT = seq(['V M', 'C Comma', 'X Period', 'Z Slash']);
+const TH_NUM = seq(['5 8', '4 9', '0 Minus Equal']);
+const TH_MARK = seq(['J H Y U', 'B N 6 7']); // วรรณยุกต์และสระบน-ล่าง
+
+const LEVELS = {
+  en: [
+    ...EN_HOME, review(last(EN_HOME)),
+    ...EN_TOP, review(last(EN_TOP)),
+    ...EN_BOT, review(last(EN_BOT)),
+    review([...last(EN_HOME), ...last(EN_TOP), ...last(EN_BOT)], '🌈'),
+    ...EN_NUM,
+    { words: 'a', icon: '📖' }, { words: 'b', icon: '📖' }, { words: 'c', icon: '📖' },
+  ],
+  th: [
+    ...TH_HOME, review(last(TH_HOME)),
+    ...TH_TOP, review(last(TH_TOP)),
+    ...TH_BOT, review(last(TH_BOT)),
+    ...TH_NUM,
+    ...TH_MARK,
+    review([...last(TH_HOME), ...last(TH_TOP), ...last(TH_BOT), ...last(TH_NUM), ...last(TH_MARK)], '🌈'),
+    { words: 'a', icon: '📖' }, { words: 'b', icon: '📖' }, { words: 'c', icon: '📖' },
+  ],
+};
+
+// a = คำสั้น, b = คำยาวขึ้น, c = ยากสุด (ไทย: มีสระบน-ล่างและวรรณยุกต์) ทุกคำพิมพ์ได้โดยไม่ต้องกด Shift
+const WORDS = {
+  en: {
+    a: [['GOD','👑'],['JOY','😊'],['ARK','🚢'],['SUN','☀️'],['SKY','☁️'],['SEA','🌊'],['EVE','👩'],['SON','👦'],
+        ['DAY','🌞'],['BEE','🐝'],['COW','🐮'],['OWL','🦉'],['ANT','🐜']],
+    b: [['LOVE','❤️'],['PRAY','🙏'],['DOVE','🕊️'],['LAMB','🐑'],['STAR','⭐'],['KING','👑'],['FISH','🐟'],['HOPE','🌈'],
+        ['AMEN','🙏'],['EDEN','🌳'],['SING','🎵'],['LION','🦁'],['NOAH','🚢'],['MARY','👩'],['ADAM','👨'],['GIFT','🎁'],
+        ['GOOD','👍'],['HOLY','✨']],
+    c: [['JESUS','✝️'],['BIBLE','📖'],['ANGEL','👼'],['BREAD','🍞'],['LIGHT','🕯️'],['CHURCH','⛪'],['HEAVEN','☁️'],
+        ['GRACE','🎁'],['FAITH','💪'],['PEACE','🕊️'],['DAVID','👑'],['MOSES','🌊'],['CROSS','✝️'],['PRAISE','🙌'],
+        ['FRIEND','🤝'],['FAMILY','🏠'],['THANK','💐']],
+  },
+  th: {
+    a: [['นก','🕊️'],['พร','🎁'],['ตา','👁️'],['นา','🌾'],['ลม','🌬️'],['มด','🐜'],['กบ','🐸'],['นม','🥛'],['แกะ','🐑'],
+        ['ปลา','🐟'],['ดาว','⭐'],['สวน','🌷'],['แสง','✨'],['สงบ','😌'],['ทาง','🛤️'],['แพะ','🐐'],['หอย','🐚']],
+    b: [['อาเมน','🙏'],['กางเขน','✝️'],['พระพร','🎁'],['อวยพร','🙌'],['เมตตา','💗'],['มานา','🍞'],['เอเดน','🌳'],
+        ['เอวา','👩'],['ทะเล','🌊'],['เพลง','🎵'],['แสงดาว','⭐'],['ทะเลสงบ','🌊'],['สวนเอเดน','🌳'],['แกะหลงทาง','🐑'],
+        ['เพลงอวยพร','🎵'],['ขอพระพร','🙏']],
+    c: [['รัก','❤️'],['พระเจ้า','🙌'],['ความรัก','💗'],['สันติ','🕊️'],['เชื่อ','🙏'],['ยินดี','😊'],['ดาวิด','👑'],
+        ['ดาเนียล','🦁'],['ไม้กางเขน','✝️'],['พี่น้อง','👫'],['เพื่อน','🤝'],['บ้าน','🏠'],['ครอบครัว','🏠'],
+        ['ให้อภัย','🤗'],['แบ่งปัน','🍞'],['เชื่อฟัง','👂'],['ร้องเพลง','🎵'],['พระเจ้ารักเรา','❤️']],
+  },
+};
+
+// ท้ายด่านเป็นเรื่องจากพระคัมภีร์ (e = รูป, shot = สิ่งที่ยิงออกไป, end = รูปตอนชนะ)
+const STORIES = [
+  { e: '🧱', name: 'กำแพงเยรีโค', shot: '🎺', win: 'กำแพงพังแล้ว!', end: '🎉' },
+  { e: '🧔', name: 'ยักษ์โกลิอัท', shot: '⚪', win: 'ดาวิดชนะแล้ว!', end: '👑' },
+  { e: '⛈️', name: 'พายุใหญ่', shot: '✨', win: 'พระเยซูห้ามพายุแล้ว!', end: '☀️' },
+  { e: '🦁', name: 'ถ้ำสิงโตของดาเนียล', shot: '🙏', win: 'สิงโตเชื่องแล้ว!', end: '😇' },
+  { e: '🐋', name: 'ปลาใหญ่ของโยนาห์', shot: '🙏', win: 'โยนาห์ออกมาแล้ว!', end: '🏖️' },
+  { e: '🌊', name: 'ทะเลแดง', shot: '✨', win: 'ทะเลแยกแล้ว!', end: '🚶' },
+  { e: '🌧️', name: 'น้ำท่วมใหญ่ของโนอาห์', shot: '🕊️', win: 'ฝนหยุดแล้ว!', end: '🌈' },
+  { e: '🔥', name: 'เตาไฟร้อน', shot: '🙏', win: 'ไฟไม่ไหม้เลย!', end: '😇' },
+  { e: '🏜️', name: 'หิวกลางทะเลทราย', shot: '🙏', win: 'พระเจ้าประทานมานา!', end: '🍞' },
+  { e: '🌑', name: 'ความมืด', shot: '✨', win: 'มีความสว่างแล้ว!', end: '☀️' },
+  { e: '🌄', name: 'ตามหาแกะหลง', shot: '🔦', win: 'เจอแกะแล้ว!', end: '🐑' },
+  { e: '🧺', name: 'เลี้ยงคนห้าพัน', shot: '🍞', win: 'ทุกคนอิ่มแล้ว!', end: '🐟' },
+  { e: '⛰️', name: 'ก้อนหินหน้าอุโมงค์', shot: '✨', win: 'พระเยซูทรงเป็นขึ้นมาแล้ว!', end: '🌅' },
+];
+// ข้อพระคัมภีร์สั้น ๆ หน้าจบด่าน แก้ถ้อยคำให้ตรงกับฉบับที่บ้านใช้ได้
+const VERSES = [
+  ['พระเจ้าทรงเป็นความรัก', '1 ยอห์น 4:8'],
+  ['จงรักซึ่งกันและกัน', 'ยอห์น 13:34'],
+  ['จงชื่นชมยินดีในองค์พระผู้เป็นเจ้าทุกเวลา', 'ฟีลิปปี 4:4'],
+  ['อย่ากลัวเลย เพราะเราอยู่กับเจ้า', 'อิสยาห์ 41:10'],
+  ['จงขอบพระคุณในทุกกรณี', '1 เธสะโลนิกา 5:18'],
+  ['ข้าพเจ้าทำทุกสิ่งได้โดยพระองค์ผู้ทรงเสริมกำลังข้าพเจ้า', 'ฟีลิปปี 4:13'],
+];
+// สัตว์ขึ้นเรือโนอาห์: ผ่านด่านได้ 1 ตัว ได้ 3 ดาวได้ครบคู่
+const ANIMALS = ['🐘','🦒','🦁','🐯','🐻','🐼','🐵','🦓','🐴','🐮','🐷','🐑','🐐','🐪','🦌','🐰','🦊','🐺','🐶','🐱','🐔','🦆','🦉','🐢','🐸','🐧','🦜','🐿️'];
+
+const ROUND_LETTERS = 10, BOSS_HP = 5, ROUND_WORDS = 6;
+const RISE_SECONDS = 9;      // เวลาที่ลูกโป่งลอยจนหลุดจอ (คอมโบสูงจะเร็วขึ้น พลาดจะช้าลง)
+const ENDLESS_LIVES = 3, MAX_LIVES = 5;
+const BALLOON_COLORS = ['#ff6b6b','#f06595','#cc5de8','#5c7cfa','#339af0','#20c997','#51cf66','#fcc419','#ff922b'];
+const PRAISE = ['เก่งมาก!', 'ฮาเลลูยา!', 'พระเจ้าอวยพร!', 'เยี่ยมไปเลย!'];
+
+// ---------- บันทึกความคืบหน้า ----------
+const STORE = 'typingKidsV2';
+let save = { lang: 'th', sound: true, unlockAll: false, stars: { en: [], th: [] }, best: { en: [], th: [] }, endless: { en: 0, th: 0 } };
+try { Object.assign(save, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+function persist() { try { localStorage.setItem(STORE, JSON.stringify(save)); } catch (e) {} }
+const starsOf = i => (save.stars[save.lang] || [])[i] || 0;
+
+// ---------- เสียง ----------
+let actx;
+function tone(freq, dur, type = 'sine', when = 0, vol = 0.18) {
+  if (!save.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + when;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const sfx = {
+  // เสียงสูงขึ้นตามคอมโบ
+  good: (combo = 0) => { const f = 520 * 2 ** (Math.min(combo, 12) / 12); tone(f, .12); tone(f * 1.5, .18, 'sine', .08); },
+  bad: () => tone(160, .18, 'triangle', 0, .12),
+  miss: () => { tone(420, .15); tone(300, .25, 'sine', .12); },
+  combo: () => [784, 988, 1175].forEach((f, i) => tone(f, .12, 'square', i * .07, .08)),
+  boss: () => [196, 185, 175, 147].forEach((f, i) => tone(f, .28, 'sawtooth', i * .2, .1)),
+  boom: () => { tone(90, .5, 'sawtooth', 0, .2); tone(60, .6, 'square', .05, .15); },
+  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .25, 'sine', i * .13)),
+};
+function say(text) {
+  if (!save.sound || !window.speechSynthesis) return;
+  const prefix = save.lang === 'th' ? 'th' : 'en';
+  const voice = speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith(prefix));
+  if (!voice) return; // เครื่องไม่มีเสียงภาษานี้ก็ข้ามไป
+  const u = new SpeechSynthesisUtterance(text.toLowerCase());
+  u.voice = voice; u.lang = voice.lang; u.rate = 0.8;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+// ---------- ตัวช่วย ----------
+const $ = id => document.getElementById(id);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const isMark = ch => /[ัิ-ฺ็-๎]/.test(ch);
+const show = ch => isMark(ch) ? '◌' + ch : ch;
+function screen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+function starStr(n) { return [0, 1, 2].map(i => `<span class="${i < n ? '' : 'dim'}" style="animation-delay:${i * .25}s">⭐</span>`).join(''); }
+function gen(keys, fresh, n) {
+  const bag = [...keys, ...fresh, ...fresh], out = []; // ปุ่มใหม่ของด่านออกบ่อยกว่า
+  while (out.length < n) { const c = pick(bag); if (keys.length < 2 || c !== out[out.length - 1]) out.push(c); }
+  return out;
+}
+
+// ---------- เมนู ----------
+function renderMenu() {
+  const levels = LEVELS[save.lang];
+  document.querySelectorAll('[data-lang]').forEach(b => b.classList.toggle('on', b.dataset.lang === save.lang));
+  $('snd').textContent = save.sound ? '🔊' : '🔇';
+  let total = 0, animals = 0;
+  const box = $('levels'); box.innerHTML = '';
+  levels.forEach((lv, i) => {
+    const st = starsOf(i); total += st; animals += st === 3 ? 2 : st ? 1 : 0;
+    const locked = !save.unlockAll && i > 0 && !starsOf(i - 1);
+    const sample = lv.words ? WORDS[save.lang][lv.words][0][0]
+      : lv.fresh.length ? lv.fresh.slice(0, 5).map(c => show(LABEL[save.lang][c])).join(' ')
+      : lv.icon === '🌈' ? 'ทุกตัว' : 'ทบทวน';
+    const b = document.createElement('button');
+    b.className = 'lv' + (locked ? ' lock' : '');
+    b.innerHTML = `<div class="n">${locked ? '🔒' : lv.icon || ''} ${i + 1}</div><div class="s">${sample}</div>
+      <div class="st">${starStr(st)}</div>`;
+    if (!locked) b.onclick = () => startLevel(i);
+    box.appendChild(b);
+  });
+  $('total').textContent = `⭐ ${total} / ${levels.length * 3}`;
+  $('arkBtn').textContent = `🚢 เรือโนอาห์ ${animals}/${levels.length * 2}`;
+  $('endlessBtn').textContent = '🌈 เล่นไม่หยุด' + (save.endless[save.lang] ? ` (สูงสุด ${save.endless[save.lang]})` : '');
+  $('unlock').textContent = save.unlockAll ? '🔒 ล็อกด่านตามลำดับ' : '🔓 เปิดทุกด่าน (สำหรับผู้ปกครอง)';
+  G = null;
+  document.body.classList.remove('night');
+  screen('menu');
+}
+
+function renderArk() {
+  const levels = LEVELS[save.lang];
+  let n = 0;
+  $('pairs').innerHTML = levels.map((lv, i) => {
+    const st = starsOf(i), a = ANIMALS[i % ANIMALS.length];
+    n += st === 3 ? 2 : st ? 1 : 0;
+    const body = st === 3 ? a + a : st ? `${a}<span class="dim">${a}</span>` : '<span class="dim">❔❔</span>';
+    return `<div class="pair">${body}<small>ด่าน ${i + 1}</small></div>`;
+  }).join('');
+  $('arkCount').textContent = `ขึ้นเรือแล้ว ${n} จาก ${levels.length * 2} ตัว — ได้ 3 ดาวจะได้ครบคู่`;
+  screen('ark');
+}
+
+// ---------- เล่น ----------
+let G = null;
+
+function buildKeyboard(keys) {
+  const used = new Set(keys || Object.values(CODE_OF[save.lang]));
+  const kb = $('kb'); kb.innerHTML = '';
+  ROWS.forEach((row, r) => {
+    const el = document.createElement('div'); el.className = 'row';
+    el.style.paddingLeft = `calc((var(--k) + var(--gap)) * ${ROW_OFFSET[r]})`;
+    row.forEach(code => {
+      const k = document.createElement('div');
+      k.className = 'key' + (used.has(code) ? ' use' : '') + (code === 'KeyF' || code === 'KeyJ' ? ' bump' : '');
+      k.dataset.code = code;
+      k.style.background = `var(--f${FINGER[code]})`;
+      k.textContent = show(LABEL[save.lang][code] || '');
+      k.onpointerdown = e => { e.preventDefault(); press(code); };
+      el.appendChild(k);
+    });
+    kb.appendChild(el);
+  });
+  const sp = document.createElement('div'); sp.className = 'row'; sp.style.justifyContent = 'center';
+  sp.innerHTML = '<div class="key space"></div>';
+  kb.appendChild(sp);
+}
+
+function newGame(extra) {
+  G = { i: -1, pos: 0, hits: 0, misses: 0, busy: false, combo: 0, score: 0, slow: 0, bossAt: Infinity, ...extra };
+  document.body.classList.remove('night');
+}
+
+function startLevel(i) {
+  const lv = LEVELS[save.lang][i];
+  newGame({ i, lv });
+  if (lv.words) {
+    const pool = [...WORDS[save.lang][lv.words]].sort(() => Math.random() - .5).slice(0, ROUND_WORDS);
+    G.items = pool.map(([w, pic]) => ({ chars: [...w], pic, at: 0 }));
+  } else {
+    G.bossAt = lv.n || ROUND_LETTERS; // ตัวท้าย ๆ ของด่านคือพลังชีวิตของบอส
+    G.items = gen(lv.keys, lv.fresh, G.bossAt + BOSS_HP);
+  }
+  buildKeyboard(lv.words ? null : lv.keys);
+  updateHud(); screen('play'); showTarget();
+}
+
+// เล่นไม่หยุด: ใช้ปุ่มจากทุกด่านที่ผ่านแล้ว เร็วขึ้นทุกรอบ ลูกโป่งหลุดเสียหัวใจ ชนะบอสได้หัวใจคืน
+function startEndless() {
+  const levels = LEVELS[save.lang];
+  let keys = [...new Set(levels.flatMap((lv, i) => lv.keys && starsOf(i) ? lv.keys : []))];
+  if (!keys.length) keys = levels[0].keys;
+  newGame({ endless: true, wave: 0, lives: ENDLESS_LIVES, lv: { keys, fresh: [] } });
+  newWave();
+  buildKeyboard(keys);
+  updateHud(); screen('play'); showTarget();
+}
+function newWave() {
+  G.pos = 0; G.bossAt = ROUND_LETTERS;
+  G.items = gen(G.lv.keys, [], ROUND_LETTERS + BOSS_HP);
+  document.body.classList.remove('night');
+}
+const story = () => STORIES[(G.endless ? G.wave : G.i) % STORIES.length];
+
+function updateHud(bump) {
+  $('score').textContent = '⭐ ' + G.score;
+  $('combo').textContent = G.combo >= 2 ? '🔥 x' + G.combo : '';
+  $('lives').textContent = G.endless ? '❤️'.repeat(G.lives) : '';
+  if (bump) for (const id of ['score', 'combo']) { const el = $(id); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+
+function toast(text) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = text;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1400);
+}
+
+function balloonEscaped(g) {
+  if (g !== G || G.busy) return;
+  G.misses++; G.combo = 0; G.slow += G.endless ? 1 : 2; // ลอยหลุดแล้วรอบถัดไปช้าลงให้
+  sfx.miss();
+  if (G.endless && --G.lives <= 0) return finish();
+  updateHud(); toast('🎈 ลอยไปแล้ว เอาใหม่นะ!');
+  showTarget();
+}
+
+function targetCode() {
+  const it = G.items[G.pos];
+  return G.lv.words ? CODE_OF[save.lang][it.chars[it.at]] : it;
+}
+
+function showTarget() {
+  const stage = $('stage'), it = G.items[G.pos];
+  const pct = G.pos / G.items.length * 100;
+  $('fill').style.width = pct + '%'; $('rocket').style.left = pct + '%';
+  if (G.lv.words) {
+    // สระบน-ล่างและวรรณยุกต์แสดงรวมกับพยัญชนะ แต่ยังต้องพิมพ์ทีละตัว
+    let html = '', n = 0, i = 0;
+    while (i < it.chars.length) {
+      let j = i + 1; while (j < it.chars.length && isMark(it.chars[j])) j++;
+      html += `<span class="${it.at >= j ? 'ok' : it.at >= i ? 'cur' : ''}">${it.chars.slice(i, j).join('')}</span>`;
+      i = j; n++;
+    }
+    stage.innerHTML = `<div class="pic">${it.pic}</div><div class="word${n > 6 ? ' long' : ''}" id="tgt">${html}</div>`;
+  } else if (G.pos >= G.bossAt) {
+    const ch = LABEL[save.lang][it], left = G.items.length - G.pos;
+    if (!$('mon')) {
+      const st = story();
+      document.body.classList.add('night');
+      stage.innerHTML = `<div class="boss"><div class="hp" id="hp"></div><div class="vs">
+        <div class="mon" id="mon">${st.e}</div><div class="bubble" id="tgt"></div></div></div>`;
+      toast(`${st.e} ${st.name}!`); sfx.boss();
+    }
+    $('hp').textContent = '❤️'.repeat(left) + '🖤'.repeat(BOSS_HP - left);
+    $('tgt').textContent = show(ch);
+    say(ch);
+  } else {
+    const ch = LABEL[save.lang][it], g = G;
+    const base = G.endless ? Math.max(4.5, RISE_SECONDS - G.wave * 0.6) : RISE_SECONDS;
+    const secs = Math.max(3.5, base + G.slow - Math.min(G.combo, 10) * 0.3);
+    stage.innerHTML = `<div class="riser" id="riser" style="--t:${secs}s">
+      <div class="balloon" id="tgt" style="background:${pick(BALLOON_COLORS)}">${show(ch)}</div></div>`;
+    $('riser').addEventListener('animationend', e => { if (e.animationName === 'rise') balloonEscaped(g); });
+    say(ch);
+  }
+  const code = targetCode(), f = FINGER[code];
+  document.querySelectorAll('.key.target').forEach(k => k.classList.remove('target'));
+  document.querySelector(`.key[data-code="${code}"]`).classList.add('target');
+  $('hint').innerHTML = `<i style="background:var(--f${f})"></i>ใช้${FINGER_NAME[f]}`;
+  G.busy = false;
+}
+
+function burst() {
+  const stage = $('stage');
+  for (let n = 0; n < 10; n++) {
+    const b = document.createElement('span');
+    b.className = 'bit'; b.textContent = pick(['⭐', '✨', '🎉', '💛', '🌟']);
+    const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 140;
+    b.style.left = '50%'; b.style.top = '45%';
+    b.style.setProperty('--dx', Math.cos(a) * d + 'px'); b.style.setProperty('--dy', Math.sin(a) * d + 'px');
+    stage.appendChild(b); setTimeout(() => b.remove(), 800);
+  }
+}
+
+function press(code) {
+  if (!G || G.busy || !$('play').classList.contains('on')) return;
+  if (!LABEL[save.lang][code]) return;
+  const tgt = $('tgt'), g = G;
+  if (code !== targetCode()) {
+    G.misses++; G.combo = 0; sfx.bad(); updateHud();
+    tgt.classList.remove('shake'); void tgt.offsetWidth; tgt.classList.add('shake');
+    const k = document.querySelector(`.key[data-code="${code}"]`);
+    k.classList.add('bad'); setTimeout(() => k.classList.remove('bad'), 300);
+    return;
+  }
+  G.hits++; G.combo++;
+  G.score += 10 * (1 + Math.floor(G.combo / 5)); // คอมโบยิ่งยาว คะแนนต่อปุ่มยิ่งเยอะ
+  sfx.good(G.combo); updateHud(true);
+  if (G.combo % 5 === 0) { toast(`🔥 คอมโบ x${G.combo}!`); sfx.combo(); }
+  if (G.lv.words) {
+    const it = G.items[G.pos];
+    if (++it.at < it.chars.length) return showTarget();
+    G.busy = true;
+    tgt.querySelectorAll('span').forEach(s => s.className = 'ok');
+    burst(); say(it.chars.join(''));
+    setTimeout(() => advance(g), 900);
+  } else if (G.pos >= G.bossAt) {
+    G.busy = true;
+    const left = G.items.length - G.pos - 1, mon = $('mon'), st = story();
+    const shot = document.createElement('span');
+    shot.className = 'shot'; shot.textContent = st.shot;
+    $('stage').appendChild(shot); setTimeout(() => shot.remove(), 280);
+    $('hp').textContent = '❤️'.repeat(left) + '🖤'.repeat(BOSS_HP - left);
+    mon.classList.remove('hit'); void mon.offsetWidth;
+    if (left) { mon.classList.add('hit'); setTimeout(() => advance(g), 380); }
+    else { mon.classList.add('dead'); tgt.textContent = st.end; burst(); burst(); sfx.boom(); toast(`${st.end} ${st.win}`); setTimeout(() => advance(g), 1400); }
+  } else {
+    G.busy = true;
+    $('riser').style.animationPlayState = 'paused';
+    tgt.classList.add('pop'); burst();
+    setTimeout(() => advance(g), 380);
+  }
+}
+
+function confetti() {
+  for (let n = 0; n < 40; n++) {
+    const c = document.createElement('span');
+    c.className = 'conf'; c.textContent = pick(['🎉', '🎊', '⭐', '🎈', '💖', '✨']);
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.animationDuration = 1.8 + Math.random() * 2 + 's';
+    c.style.animationDelay = Math.random() * .8 + 's';
+    document.body.appendChild(c); setTimeout(() => c.remove(), 4800);
+  }
+}
+
+function advance(g) {
+  if (g !== G) return; // ออกจากด่านไปแล้วระหว่างรอแอนิเมชัน
+  if (++G.pos < G.items.length) return showTarget();
+  if (!G.endless) return finish();
+  G.wave++; G.lives = Math.min(MAX_LIVES, G.lives + 1);
+  newWave(); updateHud(); toast(`รอบที่ ${G.wave + 1} ❤️+1`);
+  showTarget();
+}
+
+function finish() {
+  document.body.classList.remove('night');
+  let old, reward = '';
+  if (G.endless) {
+    old = save.endless[save.lang] || 0;
+    save.endless[save.lang] = Math.max(old, G.score);
+    $('doneMsg').textContent = 'จบเกมแล้ว เก่งมาก!';
+    $('doneStars').innerHTML = `<span style="font-size:.5em;letter-spacing:0">🌈 ผ่าน ${G.wave} รอบ</span>`;
+    $('next').style.display = 'none';
+  } else {
+    const acc = G.hits / (G.hits + G.misses);
+    const stars = acc >= .9 ? 3 : acc >= .7 ? 2 : 1;
+    const list = save.stars[save.lang] = save.stars[save.lang] || [], was = list[G.i] || 0;
+    list[G.i] = Math.max(was, stars);
+    const best = save.best[save.lang] = save.best[save.lang] || [];
+    old = best[G.i] || 0; best[G.i] = Math.max(old, G.score);
+    const a = ANIMALS[G.i % ANIMALS.length];
+    if (stars === 3 && was < 3) reward = `🚢 ${a}${a} ขึ้นเรือครบคู่แล้ว!`;
+    else if (!was) reward = `🚢 ${a} ขึ้นเรือแล้ว! ได้ 3 ดาวจะได้ครบคู่`;
+    else if (list[G.i] < 3) reward = `ได้ 3 ดาวเพื่อพา ${a} อีกตัวขึ้นเรือ`;
+    $('doneMsg').textContent = pick(PRAISE);
+    $('doneStars').innerHTML = starStr(stars);
+    $('next').style.display = G.i + 1 < LEVELS[save.lang].length ? '' : 'none';
+  }
+  persist();
+  $('doneScore').textContent = `⭐ ${G.score} คะแนน` + (G.score > old ? ' 🏆 สถิติใหม่!' : ` (สูงสุด ${old})`);
+  $('doneReward').textContent = reward;
+  const [verse, ref] = pick(VERSES);
+  $('verse').innerHTML = `“${verse}”<small>${ref}</small>`;
+  screen('done'); sfx.win(); confetti();
+}
+
+// ---------- ปุ่มและคีย์บอร์ด ----------
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if ($('play').classList.contains('on')) {
+    if (e.code === 'Escape') return renderMenu();
+    if (/^F\d+$/.test(e.code)) return;
+    e.preventDefault();
+    if (!e.repeat) press(e.code);
+  } else if ($('done').classList.contains('on') && (e.code === 'Enter' || e.code === 'Space')) {
+    e.preventDefault();
+    ($('next').style.display === 'none' ? $('again') : $('next')).click();
+  }
+});
+document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { save.lang = b.dataset.lang; persist(); renderMenu(); });
+$('snd').onclick = () => { save.sound = !save.sound; persist(); renderMenu(); };
+$('unlock').onclick = () => { save.unlockAll = !save.unlockAll; persist(); renderMenu(); };
+$('back').onclick = $('home').onclick = $('arkBack').onclick = renderMenu;
+$('arkBtn').onclick = renderArk;
+$('endlessBtn').onclick = startEndless;
+$('again').onclick = () => G.endless ? startEndless() : startLevel(G.i);
+$('next').onclick = () => startLevel(G.i + 1);
+if (window.speechSynthesis) speechSynthesis.getVoices(); // ให้เบราว์เซอร์โหลดรายการเสียงไว้ก่อน
+
+renderMenu();
+</script>
+</body>
+</html>
