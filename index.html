@@ -49,6 +49,7 @@
   .lv .s { font-size: 19px; height: 1.5em; white-space: nowrap; overflow: hidden; }
   .lv .st { font-size: 17px; letter-spacing: 1px; }
   .dim { opacity: .22; filter: grayscale(1); }
+  .vinfo { font-size: 14px; opacity: .75; text-align: center; max-width: 90vw; flex: none; }
 
   /* ---------- เรือโนอาห์ ---------- */
   .arkbig { font-size: min(90px, 16vw); line-height: 1; }
@@ -182,6 +183,8 @@
   </div>
   <div class="levels" id="levels"></div>
   <button class="pill small" id="unlock"></button>
+  <button class="pill small" id="testSnd">🔈 ทดสอบเสียง</button>
+  <div class="vinfo" id="voiceInfo"></div>
 </div>
 
 <div id="ark" class="screen">
@@ -216,6 +219,7 @@
   </div>
 </div>
 
+<script src="voices.js"></script>
 <script>
 // ---------- แป้นพิมพ์ ----------
 // จับคู่ด้วยตำแหน่งปุ่มจริง (event.code) จึงไม่ต้องสลับภาษาของ Windows ก่อนเล่น
@@ -363,10 +367,15 @@ const starsOf = i => (save.stars[save.lang] || [])[i] || 0;
 
 // ---------- เสียง ----------
 let actx;
+function audio() {
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume(); // เบราว์เซอร์พักเสียงไว้จนกว่าจะมีการกดปุ่ม
+  return actx;
+}
 function tone(freq, dur, type = 'sine', when = 0, vol = 0.18) {
   if (!save.sound) return;
   try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + when;
     o.type = type; o.frequency.value = freq;
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -383,15 +392,61 @@ const sfx = {
   boom: () => { tone(90, .5, 'sawtooth', 0, .2); tone(60, .6, 'square', .05, .15); },
   win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .25, 'sine', i * .13)),
 };
-function say(text) {
-  if (!save.sound || !window.speechSynthesis) return;
+// รายการเสียงอ่านโหลดช้ากว่าหน้าเว็บ จึงต้องถามใหม่ทุกครั้ง
+function findVoice() {
+  if (!window.speechSynthesis) return null;
   const prefix = save.lang === 'th' ? 'th' : 'en';
-  const voice = speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith(prefix));
-  if (!voice) return; // เครื่องไม่มีเสียงภาษานี้ก็ข้ามไป
-  const u = new SpeechSynthesisUtterance(text.toLowerCase());
-  u.voice = voice; u.lang = voice.lang; u.rate = 0.8;
-  speechSynthesis.cancel(); speechSynthesis.speak(u);
+  const list = speechSynthesis.getVoices().filter(v => v.lang.toLowerCase().replace('_', '-').startsWith(prefix));
+  return list.find(v => v.localService) || list[0] || null;
 }
+// เสียงอ่านหลักมาจาก voices.js (ไฟล์เสียงที่อัดไว้) เล่นผ่านช่องทางเดียวกับเสียงเอฟเฟกต์ จึงดังได้ทุกเครื่อง
+// ถ้าไม่มีไฟล์หรือไม่มีคำนั้น ค่อยใช้เสียงสังเคราะห์ของเบราว์เซอร์
+const clipCache = {};
+let clipSrc, clipToken = 0;
+function playClip(key) {
+  const token = ++clipToken, ctx = audio();
+  const play = buf => {
+    if (token !== clipToken) return; // มีคำใหม่กว่ามาแทนแล้ว
+    try { if (clipSrc) clipSrc.stop(); } catch (e) {}
+    clipSrc = ctx.createBufferSource(); clipSrc.buffer = buf;
+    clipSrc.connect(ctx.destination); clipSrc.start();
+  };
+  if (clipCache[key]) return play(clipCache[key]);
+  const bytes = Uint8Array.from(atob(window.VOICES[key]), c => c.charCodeAt(0));
+  ctx.decodeAudioData(bytes.buffer, buf => { clipCache[key] = buf; play(buf); }, () => {});
+}
+let sayTimer, lastUtter;
+function say(text) {
+  if (!save.sound) return;
+  const key = save.lang + ':' + text;
+  if (window.VOICES && window.VOICES[key]) { try { playClip(key); } catch (e) {} return; }
+  const voice = findVoice();
+  if (!voice) return; // เครื่องไม่มีเสียงภาษานี้ก็ข้ามไป
+  const u = new SpeechSynthesisUtterance(save.lang === 'en' ? text.toLowerCase() : text);
+  u.voice = voice; u.lang = voice.lang; u.rate = 0.85;
+  lastUtter = u; // เก็บไว้กัน Chrome ทิ้งเสียงกลางคัน
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  // Chrome ทิ้งคำพูดที่สั่งทันทีหลัง cancel จึงต้องเว้นจังหวะนิดหนึ่ง
+  clearTimeout(sayTimer);
+  sayTimer = setTimeout(() => { speechSynthesis.resume(); speechSynthesis.speak(u); }, 80);
+}
+function voiceInfo() {
+  const v = findVoice(), lang = save.lang === 'th' ? 'ไทย' : 'อังกฤษ';
+  $('voiceInfo').textContent = window.VOICES ? 'เสียงอ่าน: ใช้ไฟล์เสียงในเกม'
+    : v ? `เสียงอ่านภาษา${lang}: ${v.name}`
+    : `เครื่องนี้ไม่มีเสียงอ่านภาษา${lang} เกมจะมีแต่เสียงเอฟเฟกต์ (Windows: Settings > Time & language > Speech > Add voices)`;
+}
+// เสียงสังเคราะห์อ่านอักษรไทยตัวเดียวโดด ๆ ผิดเพี้ยน จึงให้อ่านชื่อเรียกแทน เช่น "กอ ไก่" "สระ อา" "ไม้เอก"
+const TH_NAME = {
+  'ก': 'กอ ไก่', 'ข': 'ขอ ไข่', 'ฃ': 'ขอ ขวด', 'ค': 'คอ ควาย', 'ง': 'งอ งู', 'จ': 'จอ จาน', 'ช': 'ชอ ช้าง',
+  'ด': 'ดอ เด็ก', 'ต': 'ตอ เต่า', 'ถ': 'ถอ ถุง', 'ท': 'ทอ ทหาร', 'น': 'นอ หนู', 'บ': 'บอ ใบไม้', 'ป': 'ปอ ปลา',
+  'ผ': 'ผอ ผึ้ง', 'ฝ': 'ฝอ ฝา', 'พ': 'พอ พาน', 'ฟ': 'ฟอ ฟัน', 'ภ': 'พอ สำเภา', 'ม': 'มอ ม้า', 'ย': 'ยอ ยักษ์',
+  'ร': 'รอ เรือ', 'ล': 'ลอ ลิง', 'ว': 'วอ แหวน', 'ส': 'สอ เสือ', 'ห': 'หอ หีบ', 'อ': 'ออ อ่าง',
+  'ะ': 'สระ อะ', 'า': 'สระ อา', 'ำ': 'สระ อำ', 'เ': 'สระ เอ', 'แ': 'สระ แอ', 'ไ': 'สระ ไอ ไม้มลาย', 'ใ': 'สระ ใอ ไม้ม้วน',
+  'ิ': 'สระ อิ', 'ี': 'สระ อี', 'ึ': 'สระ อึ', 'ื': 'สระ อือ', 'ุ': 'สระ อุ', 'ั': 'ไม้หันอากาศ',
+  '่': 'ไม้เอก', '้': 'ไม้โท', 'ๆ': 'ไม้ยมก', 'ๅ': 'ลากข้างยาว', '/': 'ทับ', '-': 'ขีด',
+};
+const keyName = ch => save.lang === 'th' ? TH_NAME[ch] || ch : ch;
 
 // ---------- ตัวช่วย ----------
 const $ = id => document.getElementById(id);
@@ -430,6 +485,7 @@ function renderMenu() {
   $('arkBtn').textContent = `🚢 เรือโนอาห์ ${animals}/${levels.length * 2}`;
   $('endlessBtn').textContent = '🌈 เล่นไม่หยุด' + (save.endless[save.lang] ? ` (สูงสุด ${save.endless[save.lang]})` : '');
   $('unlock').textContent = save.unlockAll ? '🔒 ล็อกด่านตามลำดับ' : '🔓 เปิดทุกด่าน (สำหรับผู้ปกครอง)';
+  voiceInfo();
   G = null;
   document.body.classList.remove('night');
   screen('menu');
@@ -560,7 +616,7 @@ function showTarget() {
     }
     $('hp').textContent = '❤️'.repeat(left) + '🖤'.repeat(BOSS_HP - left);
     $('tgt').textContent = show(ch);
-    say(ch);
+    say(keyName(ch));
   } else {
     const ch = LABEL[save.lang][it], g = G;
     const base = G.endless ? Math.max(4.5, RISE_SECONDS - G.wave * 0.6) : RISE_SECONDS;
@@ -568,12 +624,13 @@ function showTarget() {
     stage.innerHTML = `<div class="riser" id="riser" style="--t:${secs}s">
       <div class="balloon" id="tgt" style="background:${pick(BALLOON_COLORS)}">${show(ch)}</div></div>`;
     $('riser').addEventListener('animationend', e => { if (e.animationName === 'rise') balloonEscaped(g); });
-    say(ch);
+    say(keyName(ch));
   }
   const code = targetCode(), f = FINGER[code];
   document.querySelectorAll('.key.target').forEach(k => k.classList.remove('target'));
   document.querySelector(`.key[data-code="${code}"]`).classList.add('target');
-  $('hint').innerHTML = `<i style="background:var(--f${f})"></i>ใช้${FINGER_NAME[f]}`;
+  const nm = G.lv.words || save.lang !== 'th' ? '' : keyName(LABEL.th[code]) + ' · ';
+  $('hint').innerHTML = `<i style="background:var(--f${f})"></i>${nm}ใช้${FINGER_NAME[f]}`;
   G.busy = false;
 }
 
@@ -702,7 +759,14 @@ $('arkBtn').onclick = renderArk;
 $('endlessBtn').onclick = startEndless;
 $('again').onclick = () => G.endless ? startEndless() : startLevel(G.i);
 $('next').onclick = () => startLevel(G.i + 1);
-if (window.speechSynthesis) speechSynthesis.getVoices(); // ให้เบราว์เซอร์โหลดรายการเสียงไว้ก่อน
+$('testSnd').onclick = () => {
+  const was = save.sound; save.sound = true; // ทดสอบได้แม้ปิดเสียงอยู่
+  sfx.win(); setTimeout(() => { say(save.lang === 'th' ? 'กอ ไก่ สระ อา ไม้เอก' : 'A'); save.sound = was; }, 700);
+};
+if (window.speechSynthesis) {
+  speechSynthesis.getVoices(); // ให้เบราว์เซอร์โหลดรายการเสียงไว้ก่อน
+  speechSynthesis.addEventListener('voiceschanged', voiceInfo);
+}
 
 renderMenu();
 </script>
